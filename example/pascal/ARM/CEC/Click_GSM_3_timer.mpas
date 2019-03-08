@@ -1,0 +1,30 @@
+{*
+
+Use mikroE Timer Calculator to generate proper timer configuration
+and timer ISR.
+
+https://www.mikroe.com/timer-calculator
+
+*}
+unit Click_GSM_3_timer;
+
+uses Click_GSM_3_types;
+
+procedure gsm3_configTimer(); 
+
+implementation
+
+procedure gsm3_configTimer(); 
+begin
+
+
+end;
+
+procedure Timer_interrupt(); 
+begin
+
+    gsm3_tick(); 
+
+end;
+
+end.

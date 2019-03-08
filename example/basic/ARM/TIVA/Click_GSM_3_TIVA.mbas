@@ -1,0 +1,134 @@
+'
+'Example for GSM_3 Click
+'
+'    Date          : Nov 2017.
+'    Author        : MikroE Team
+'
+'Test configuration TIVA :
+'    
+'    MCU              : TM4C129XNCZAD
+'    Dev. Board       : EasyMx PRO v7 for TIVA ARM
+'    ARM Compiler ver : v6.0.0.0
+'
+'---
+'
+'Description :
+'
+'The application is composed of three sections :
+'
+'- System Initialization - Initializes all necessary GPIO pins, UART used for
+'the communcation with GSM module and UART used for infromation logging
+'- Application Initialization - Initializes driver, power on module and sends few
+'command for the default module configuration
+'- Application Task - running in parallel core state machine and and checks for call flag.
+'If call detected parser will hang up call.
+'
+'Additional Functions :
+'
+'All additional functions such as timer initialization and default handler. 
+''
+'Notes :
+'
+'- Echo must be turned off for succefull parsing. ( ATE0 )
+'- UART polling works much better with HFC enabled.
+'- In case of usage of other MCUs Timer initialization must be adjusted according to your MCU.
+'
+'
+program Click_GSM_3_TIVA
+
+include Click_GSM_3_types
+include Click_GSM_3_config
+include Click_GSM_3_timer
+
+dim
+    ' COMMANDS
+    GSM3_AT as string[3]
+    GSM3_HANGUP as string[4]
+    GSM3_ECHO_OFF as string[5]
+    GSM3_FORMAT_DEFAULT as string[10]
+    GSM3_HFC_ENABLE as string[11]
+
+    ' CALLER FLAG
+    callFlag as uint8_t
+
+sub procedure gsm3_default_handler(dim rsp as ^uint8_t, dim evArgs as ^uint8_t) 
+dim
+    ptr_rsp as ^char
+    
+    ptr_rsp = rsp + 2
+    
+    if ( ptr_rsp^ = 82 ) then
+        callFlag = 1
+    end if
+
+    mikrobus_logWrite( ptr_rsp - 2, _LOG_TEXT )
+    
+end sub
+
+sub procedure systemInit() 
+
+    GSM3_AT = "AT"
+    GSM3_HANGUP = "ATH"
+    GSM3_ECHO_OFF = "ATE0"
+    GSM3_FORMAT_DEFAULT = "AT+CMGF=1"
+    GSM3_HFC_ENABLE = "AT+IFC=2,2"
+
+    callFlag = 0
+
+    mikrobus_gpioInit( _MIKROBUS1, _MIKROBUS_AN_PIN, _GPIO_INPUT )
+    mikrobus_gpioInit( _MIKROBUS1, _MIKROBUS_PWM_PIN, _GPIO_OUTPUT )
+    mikrobus_gpioInit( _MIKROBUS1, _MIKROBUS_INT_PIN, _GPIO_INPUT )
+    mikrobus_gpioInit( _MIKROBUS1, _MIKROBUS_RST_PIN, _GPIO_OUTPUT )
+    mikrobus_gpioInit( _MIKROBUS1, _MIKROBUS_CS_PIN, _GPIO_OUTPUT )    
+
+    mikrobus_uartInit(_MIKROBUS1, @_GSM3_UART_CFG[0]) 
+    mikrobus_logInit(_LOG_USBUART_A, 9600) 
+
+end sub
+
+sub procedure applicationInit() 
+
+' TIMER INIT
+    gsm3_configTimer()
+
+' DRIVER INIT
+    gsm3_uartDriverInit(T_GSM3_P(@_MIKROBUS1_GPIO), T_GSM3_P(@_MIKROBUS1_UART)) 
+    gsm3_coreInit(@gsm3_default_handler, 1500)
+
+' MODULE POWER ON
+    gsm3_hfcEnable(true) 
+    gsm3_modulePower(true) 
+
+' MODULE INIT
+    gsm3_cmdSingle(@GSM3_AT[0]) 
+    gsm3_cmdSingle(@GSM3_AT[0]) 
+    gsm3_cmdSingle(@GSM3_AT[0]) 
+    gsm3_cmdSingle(@GSM3_ECHO_OFF[0]) 
+    gsm3_cmdSingle(@GSM3_HFC_ENABLE[0]) 
+    gsm3_cmdSingle(@GSM3_FORMAT_DEFAULT[0]) 
+
+end sub
+
+sub procedure applicationTask() 
+
+    gsm3_process() 
+
+    if ((0 <> callFlag)) then 
+    
+        gsm3_cmdSingle(@GSM3_HANGUP[0]) 
+        Delay_ms(3000) 
+
+        callFlag = 0 
+    end if
+
+end sub
+
+main :
+
+    systemInit() 
+    applicationInit() 
+    while (1) 
+        applicationTask() 
+    wend
+
+end.
